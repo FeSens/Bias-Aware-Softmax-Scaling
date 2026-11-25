@@ -13,7 +13,10 @@ Self-attention has two simple, fixable blind spots when sequence lengths change 
 
 1. **Attention does not know how many keys it can actually see.** Under QK-RMSNorm, dot products are norm-capped, so more tokens dilute softmax weights. Prior fixes (Scalable-Softmax / SSMax) sharpen every query using $\log(\text{position} + 1)$ — assuming *every* earlier token is visible. On packed batches with `<|endoftext|>` document resets, sliding windows, or decay masks, that count is wrong and over-sharpens truncated heads.  
    **Fix — Bias-Aware SSMax:** Count only the keys that *survive* the mask or additive bias, center the curve around a neutral length ($\log N_0 = 5.5$) so short contexts can stay soft while long windows sharpen, and initialize at exact identity ($\tau = 1$). On modern LLMs with hard document and sliding-window masks, it collapses to an exact $O(T)$ count with zero attention-kernel changes and just **+1 scalar per head**:
-   $$N_{\mathrm{vis}}(t, \ell) = \min\!\big(\mathrm{pos\_in\_doc}(t) + 1,\; W_\ell\big), \qquad \tau_{\ell,h}(t) = \max\!\Big(0.25,\; 1 + s_{\ell,h}\big(\log N_{\mathrm{vis}}(t, \ell) - 5.5\big)\Big).$$
+
+```math
+N_{\mathrm{vis}}(t, \ell) = \min\bigl(\mathrm{pos}(t),\ W_\ell\bigr), \qquad \tau_{\ell,h}(t) = \max\Bigl(0.25,\ 1 + s_{\ell,h}\bigl(\log N_{\mathrm{vis}}(t, \ell) - 5.5\bigr)\Bigr)
+```
 
 2. **Fixed distance decay cannot act like a switch.** Static penalties (like ALiBi) decay smoothly with distance, so a head cannot pass an unbroken chain of carry-propagating digits ($a_k + b_k = 9$) with zero loss while blocking everything past the first carry-breaker ($a_k + b_k \neq 9$). Learned forget gates (FoX) can act like walls, but token-order accumulation runs *backwards* on left-to-right addition.  
    **Fix — Place-Ordered Barrier-FoX (+ Dead-Zone ReLU):** Let each token emit a non-negative wall height $g \ge 0$ accumulated strictly along the causal axis of interest (digit place order for arithmetic; token order with a dead-zone $\operatorname{ReLU}$ gate for general sequences), excluding both endpoints so a wall blocks everything behind it without blocking itself.
