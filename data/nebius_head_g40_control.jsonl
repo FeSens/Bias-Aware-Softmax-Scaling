@@ -1,0 +1,5 @@
+{"idx": 1, "arm": "head_g40", "steps": 1182, "val_loss": 3.2779, "train_time_ms": 39922.0, "step_avg_ms": 33.78, "wall_s": 209, "log_file": "logs/9c4e4382-7328-4907-a4d6-8c1221f146e8.txt"}
+{"idx": 2, "arm": "head_g40", "steps": 1182, "val_loss": 3.2782, "train_time_ms": 39908.0, "step_avg_ms": 33.76, "wall_s": 210, "log_file": "logs/332a6aa6-95bd-42ac-a45c-cecd745ecd7c.txt"}
+{"idx": 3, "arm": "head_g40", "steps": 1182, "val_loss": 3.2865, "train_time_ms": 39896.0, "step_avg_ms": 33.75, "wall_s": 207, "log_file": "logs/e8e040ec-04c4-464d-b228-a230e630bb7e.txt"}
+{"idx": 4, "arm": "head_g40", "steps": 1182, "val_loss": 3.2768, "train_time_ms": 39897.0, "step_avg_ms": 33.75, "wall_s": 208, "log_file": "logs/697e264a-509e-49b7-94f7-2747aa9b0c5f.txt"}
+{"idx": 5, "arm": "head_g40", "steps": 1182, "val_loss": 3.2805, "train_time_ms": 39903.0, "step_avg_ms": 33.76, "wall_s": 208, "log_file": "logs/bf27f552-9c80-48b3-a5a4-0656f6395b1f.txt"}
