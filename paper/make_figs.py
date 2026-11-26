@@ -1,7 +1,7 @@
 """Generate all 5 publication-grade vector figures directly from live checkpoints & JSONL logs.
 
 Figures written to paper/:
-  fig1_intuition.pdf        - Visual plain-English schematic of Bias-Aware SSMax & Place-Ordered Barrier-FoX
+  fig1_intuition.pdf        - Visual plain-English schematic of Mask-Aware SSMax & Place-Ordered Barrier-FoX
   fig2_mech_carry.pdf       - Real mechanistic circuit from live 1.27M s1 weights (barriers + intact vs zeroed attn)
   fig3_addition_results.pdf - 40x addition extrapolation + L3-L4 causal knockout + 40-digit pure-9 ReLU chains
   fig4_llm_mech.pdf         - Real 124M per-head learned slopes (bssmax vs vssmax) + 33.5M FineWeb curves
@@ -32,16 +32,8 @@ from neo_gpt import NeoGPT, NeoGPTConfig, CHARS  # noqa: E402
 
 OUT_DIR = ROOT / "paper"
 
-def _pick(*candidates: str) -> Path:
-    for rel in candidates:
-        p = ROOT / rel
-        if p.exists():
-            return p
-    raise FileNotFoundError(f"None of {candidates} found under {ROOT}")
-
-
 # Clean, modern, colorblind-friendly palette
-C_BLUE   = "#1d4ed8"  # primary champion (Bias-Aware SSMax / full model)
+C_BLUE   = "#1d4ed8"  # primary champion (Mask-Aware SSMax / full model)
 C_TEAL   = "#0f766e"  # secondary champion / 112k / ReLU
 C_AMBER  = "#d97706"  # Vanilla SSMax / warning
 C_RED    = "#dc2626"  # baseline failure / knockout / Generate wall
@@ -103,9 +95,9 @@ def make_fig1():
     ax.plot(t, np.log(n_vanilla), color=C_AMBER, linestyle="--", linewidth=1.7,
             label="Vanilla SSMax: log(global pos + 1)")
     ax.plot(t, np.log(n_vis_long), color=C_BLUE, linewidth=1.9,
-            label="Bias-Aware (Long window, W=1408)")
+            label="Mask-Aware (Long window, W=1408)")
     ax.plot(t, np.log(n_vis_short), color=C_TEAL, linewidth=1.9,
-            label="Bias-Aware (Short window, W=512)")
+            label="Mask-Aware (Short window, W=512)")
 
     ax.text(512, 0.55, "Doc 1", ha="center", va="bottom", fontsize=7.4, color="#1e3a8a", fontweight="bold")
     ax.text(1536, 0.55, "Doc 2 (after <|eot|> reset)", ha="center", va="bottom", fontsize=7.2, color="#854d0e", fontweight="bold")
@@ -234,7 +226,7 @@ def make_fig1():
 # FIGURE 2: Real Mechanistic Interpretability from Live 1.27M s1 Weights
 # =============================================================================
 def make_fig2():
-    run_dir = _pick("checkpoints/neo_gpt_v2_bssmax_bfox_mps_s1", "research/runs/neo_gpt_v2_bssmax_bfox_mps_s1")
+    run_dir = ROOT / "research/runs/neo_gpt_v2_bssmax_bfox_mps_s1"
     meta = json.loads((run_dir / "metrics.json").read_text())
     cfg = NeoGPTConfig(**meta["cfg"])
 
@@ -382,8 +374,8 @@ def make_fig3():
     # --- (a) 10d -> 200d Extrapolation ---
     lens = np.array([10, 12, 18, 25, 50, 100, 200])
     series = [
-        ("1.27M Bias-SSMax + B-FoX",   [99.4, 97.9, 93.2, 83.1, 40.6, 29.7, 27.1], C_BLUE,  "o", "-"),
-        ("112k Bias-SSMax + B-FoX",    [97.5, 95.1, 83.9, 74.0, 37.0, 26.0,  5.2], C_TEAL,  "s", "-"),
+        ("1.27M Mask-SSMax + B-FoX",   [99.4, 97.9, 93.2, 83.1, 40.6, 29.7, 27.1], C_BLUE,  "o", "-"),
+        ("112k Mask-SSMax + B-FoX",    [97.5, 95.1, 83.9, 74.0, 37.0, 26.0,  5.2], C_TEAL,  "s", "-"),
         ("112k Vanilla SSMax + B-FoX", [99.5, 99.2, 92.2, 82.3, 44.5,  6.8,  1.0], C_AMBER, "^", "--"),
         ("1.27M v2 baseline",          [73.1, 64.6, 35.4, 23.4,  2.3,  0.0,  0.0], C_SLATE, "v", ":"),
         ("112k v2 baseline",           [78.2, 65.4, 32.8, 15.3,  0.0,  0.0,  0.0], C_RED,   "x", ":"),
@@ -459,7 +451,7 @@ def make_fig3():
 # FIGURE 4: 124M Learned Per-Head Slopes (Mech Interp) + 33.5M FineWeb Curves
 # =============================================================================
 def make_fig4():
-    rows = [json.loads(l) for l in (_pick("data/modal_124m_ablations.jsonl", "speedrun_nebius/results.jsonl")).read_text().splitlines() if l.strip()]
+    rows = [json.loads(l) for l in (ROOT / "speedrun_nebius/results.jsonl").read_text().splitlines() if l.strip()]
     ctr_low = [r for r in rows if r["arm"] in ("bssmax_ctr_lr05", "bssmax_ctr_lr025")]
     vss = [r for r in rows if r["arm"] == "vssmax_lr05"]
 
@@ -506,7 +498,7 @@ def make_fig4():
 
     ax1.errorbar(x - 0.14, bss_means, yerr=bss_stds, fmt="o-", color=C_BLUE, markersize=5.0,
                  capsize=2.5, elinewidth=1.0, lw=1.8, zorder=4,
-                 label="Bias-Aware SSMax (n=6, 250/252 > 0)")
+                 label="Mask-Aware SSMax (n=6, 250/252 > 0)")
     ax1.plot(x + 0.16, vss_means, "^--", color=C_AMBER, markersize=5.0, lw=1.6, zorder=4,
              label="Vanilla SSMax (n=2, ignores docs/windows)")
 
@@ -534,7 +526,7 @@ def make_fig4():
                fontsize=6.0, borderpad=0.24, labelspacing=0.16)
 
     # --- (b) 33.5M FineWeb-10B probe learning curves ---
-    fw = json.loads((_pick("data/fineweb_33m_probe.json", "research/speedrun_probe_results.json")).read_text())
+    fw = json.loads((ROOT / "research/speedrun_probe_results.json").read_text())
     by_arm = {}
     for r in fw:
         by_arm.setdefault(r["arm"], []).append(r)
@@ -545,7 +537,7 @@ def make_fig4():
     ax2.axhline(0.0, color=C_SLATE, linestyle=":", linewidth=1.1, label="base (modded-nanogpt, 0.000)")
     specs = [
         ("vssmax",          "vssmax (Vanilla SSMax)",        C_AMBER, "^", "--"),
-        ("bssmax",          "bssmax (Bias-Aware SSMax)",     C_BLUE,  "s", "-"),
+        ("bssmax",          "bssmax (Mask-Aware SSMax)",     C_BLUE,  "s", "-"),
         ("relu_fox",        "relu_fox (Dead-Zone ReLU-FoX)", C_RED,   "d", "-."),
         ("bssmax_relu_fox", "bssmax + relu_fox",             C_TEAL,  "o", "-"),
     ]
@@ -587,9 +579,9 @@ def make_fig4():
 # FIGURE 5: Official 8xH100 Certification (n=25) + Modal Ablations (n=27)
 # =============================================================================
 def make_fig5():
-    cert = [json.loads(l) for l in (_pick("data/nebius_cert_results.jsonl", "speedrun_nebius/nebius_cert_pool/cert_results.jsonl")).read_text().splitlines() if l.strip()]
-    ctrl = [json.loads(l) for l in (_pick("data/nebius_head_g40_control.jsonl", "speedrun_nebius/nebius_cert_pool/head_g40/head_g40_results.jsonl")).read_text().splitlines() if l.strip()]
-    modal = [json.loads(l) for l in (_pick("data/modal_124m_ablations.jsonl", "speedrun_nebius/results.jsonl")).read_text().splitlines() if l.strip()]
+    cert = [json.loads(l) for l in (ROOT / "speedrun_nebius/nebius_cert_pool/cert_results.jsonl").read_text().splitlines() if l.strip()]
+    ctrl = [json.loads(l) for l in (ROOT / "speedrun_nebius/nebius_cert_pool/head_g40/head_g40_results.jsonl").read_text().splitlines() if l.strip()]
+    modal = [json.loads(l) for l in (ROOT / "speedrun_nebius/results.jsonl").read_text().splitlines() if l.strip()]
 
     head_t = np.array([r["train_time_ms"] / 1000.0 for r in cert if r["arm"] == "baseline"])
     head_v = np.array([r["val_loss"] for r in cert if r["arm"] == "baseline"])
@@ -623,7 +615,7 @@ def make_fig5():
     ax1.scatter(g40_t, g40_v, s=34, color=C_RED, alpha=0.82, marker="X", edgecolors="white", lw=0.5,
                 label="HEAD G=40 control (n=5): FAILS gate", zorder=3)
     ax1.scatter(pr_t, pr_v, s=34, color=C_BLUE, alpha=0.92, marker="s", edgecolors="white", lw=0.5,
-                label="Bias-Aware SSMax G=40 (n=10): 39.98s!", zorder=4)
+                label="Mask-Aware SSMax G=40 (n=10): 39.98s!", zorder=4)
 
     for t_arr, v_arr, col in [(head_t, head_v, C_SLATE), (g40_t, g40_v, C_RED), (pr_t, pr_v, C_BLUE)]:
         ax1.errorbar(t_arr.mean(), v_arr.mean(), xerr=t_arr.std(ddof=1), yerr=v_arr.std(ddof=1),

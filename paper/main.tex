@@ -54,7 +54,7 @@
       \small #2
       \vspace{3pt}
     \end{minipage}%
-  }%
+  }\par
   \vspace{5pt}
 }
 
@@ -67,7 +67,7 @@
 % --- Clean Title Block ---
 \begin{center}
   {\LARGE\sffamily\bfseries\color{navy} Improving Out-of-Distribution Generalization with\\[3pt]
-  Bias-Aware Softmax Scaling and Barrier-FoX}\\[6pt]
+  Mask-Aware Softmax Scaling and Barrier-FoX}\\[6pt]
   {\large\sffamily\color{muted} From 200-Digit Arithmetic Circuits to Sub-40s 8$\times$H100 LLM Training}\\[10pt]
   {\normalsize Felipe Sens Bonetto \quad $\cdot$ \quad \texttt{felipesensbonetto@gmail.com}}
 \end{center}
@@ -81,13 +81,13 @@ First, \textbf{attention does not know how many keys it can actually see.} When 
 Second, \textbf{fixed distance decay cannot act like a switch.} Static slopes decay smoothly with distance, so a head cannot transmit an unbroken carry chain ($a_k+b_k=9$) with zero loss while blocking everything past the first carry-breaker ($a_k+b_k\neq 9$).
 
 We fix both with two minimal, strictly causal mechanisms:
-\textbf{(1)~Bias-Aware SSMax} counts only the effective keys that \emph{survive} the attention mask or bias, centers the scaling curve around a neutral length so short contexts soften while long windows sharpen, and starts at exact identity ($\tau=1$). On modern sliding-window language models it simplifies to a closed-form $O(T)$ count with zero attention-kernel changes and only $+1$ scalar per head.
+\textbf{(1)~Mask-Aware SSMax} counts only the effective keys that \emph{survive} the attention mask or bias, centers the scaling curve around a neutral length so short contexts soften while long windows sharpen, and starts at exact identity ($\tau=1$). On modern sliding-window language models it simplifies to a closed-form $O(T)$ count with zero attention-kernel changes and only $+1$ scalar per head.
 \textbf{(2)~Place-Ordered Barrier-FoX} lets each token raise a learned non-negative wall ($g \ge 0$) accumulated along the right causal axis (digit place order for arithmetic; token order with a dead-zone $\operatorname{ReLU}$ gate for general sequences).
 
 Opening the learned models reveals crisp, human-readable circuits in both small algorithmic Transformers and a $124\text{M}$ LLM:
 (i)~On addition trained only on $1,2,3,5$-digit numbers, all $9/9$ seeds spontaneously discover hardware \emph{carry-lookahead walls} (transparent on $a_k+b_k=9$, opaque walls on $<9$ and $>9$), lifting $25$-digit ($5\times$) accuracy by $+59\text{pp}$, extrapolating up to $81.2\%$ at $200$ digits ($40\times$), and collapsing from $97.7\% \to 0.0\%$ when only those walls are zeroed.
 (ii)~On multi-step symbolic algebra with zero digit formulas, general causal versions yield $3.7\times$ exact match on $2\times$ longer traces ($+17.2\text{pp}$ token accuracy, $p=0.0033$).
-(iii)~On the $124\text{M}$ \texttt{modded-nanogpt} speedrun, Bias-Aware SSMax adds just $+42$ scalars fused into QK-RMSNorm+RoPE with zero extra HBM passes ($+72\text{ ms}$, $+0\text{ MiB}$ VRAM): $250/252$ heads learn positive slopes with long-window layers learning $2.5\times$ steeper curves, run-to-run loss variance drops $3.5\text{--}4.9\times$, and an official interleaved $10\text{ vs.\ }10$ certification on $8\times\text{H100 SXM5}$ cuts training time by $-0.477\text{ s}$ ($40.45\text{ s} \to \mathbf{39.98\text{ s}}$, $p=7.6\times 10^{-12}$) while clearing the $3.28$ validation gate on $10/10$ runs ($p=1.26\times 10^{-6}$), whereas cutting steps without SSMax fails the gate ($p=0.496$).
+(iii)~On the $124\text{M}$ \texttt{modded-nanogpt} speedrun, Mask-Aware SSMax adds just $+42$ scalars fused into QK-RMSNorm+RoPE with zero extra HBM passes ($+72\text{ ms}$, $+0\text{ MiB}$ VRAM): $250/252$ heads learn positive slopes with long-window layers learning $2.5\times$ steeper curves, run-to-run loss variance drops $3.5\text{--}4.9\times$, and an official interleaved $10\text{ vs.\ }10$ certification on $8\times\text{H100 SXM5}$ cuts training time by $-0.477\text{ s}$ ($40.45\text{ s} \to \mathbf{39.98\text{ s}}$, $p=7.6\times 10^{-12}$) while clearing the $3.28$ validation gate on $10/10$ runs ($p=1.26\times 10^{-6}$), whereas cutting steps without SSMax fails the gate ($p=0.496$).
 \end{abstract}
 
 % =============================================================================
@@ -104,7 +104,7 @@ A second blind spot shows up whenever a model must route information over an arb
   \centering
   \includegraphics[width=\textwidth]{fig1_intuition.pdf}
   \caption{\textbf{Plain-English picture of both mechanisms.}
-  \textbf{(a)}~In a packed batch with document resets and sliding windows, Vanilla SSMax's $\log(\text{global pos}+1)$ over-counts keys right after every \texttt{<|eot|>} reset and beyond window $W_\ell$; Bias-Aware SSMax counts only the $N_{\mathrm{vis}}$ keys that survive the mask.
+  \textbf{(a)}~In a packed batch with document resets and sliding windows, Vanilla SSMax's $\log(\text{global pos}+1)$ over-counts keys right after every \texttt{<|eot|>} reset and beyond window $W_\ell$; Mask-Aware SSMax counts only the $N_{\mathrm{vis}}$ keys that survive the mask.
   \textbf{(b)}~Centering $\log N_{\mathrm{vis}}$ around $\log N_0 = 5.5$ ($N_0 \approx 245$) lets one positive slope $s_h$ gently \emph{soften} short contexts ($\tau < 1$) while \emph{sharpening} long windows ($\tau > 1$).
   \textbf{(c)}~On left-to-right addition, token-order forgetting places irrelevant lower digits ($b_1$) between the answer query and the nearest carry-breaker ($b_2$); Place-Ordered Barrier-FoX accumulates walls along digit places and excludes endpoints so a wall blocks everything behind it without blocking itself.}
   \label{fig:intuition}
@@ -112,19 +112,19 @@ A second blind spot shows up whenever a model must route information over an arb
 
 \takeawaybox{Summary of Contributions \& Headline Results}{
 \begin{itemize}
-  \item \textbf{Bias-Aware SSMax (\S\ref{sec:bssmax}):} Measures the exact number of keys surviving masks or additive biases, centers the temperature around a neutral length, and starts at exact identity ($\tau=1$). Beats naive Vanilla SSMax in \emph{every} domain we test---from $100$-digit addition ($26.0\%$ vs.\ $6.8\%$) to $33.5\text{M}$ FineWeb ($p=0.003$) to $124\text{M}$ \texttt{modded-nanogpt} ($-4.2\text{ mnat}$).
+  \item \textbf{Mask-Aware SSMax (\S\ref{sec:bssmax}):} Measures the exact number of keys surviving masks or additive biases, centers the temperature around a neutral length, and starts at exact identity ($\tau=1$). Beats naive Vanilla SSMax in \emph{every} domain we test---from $100$-digit addition ($26.0\%$ vs.\ $6.8\%$) to $33.5\text{M}$ FineWeb ($p=0.003$) to $124\text{M}$ \texttt{modded-nanogpt} ($-4.2\text{ mnat}$).
   \item \textbf{Place-Ordered Barrier-FoX \& Dead-Zone ReLU (\S\ref{sec:bfox}):} Fixes FoX's token-order inversion on arithmetic, yields $+59\text{pp}$ exact match at $5\times$ training length (up to $81.2\%$ at $40\times$), and spontaneously invents exact carry-lookahead walls across $9/9$ seeds (\S\ref{sec:add}). Replacing $\operatorname{softplus}$ with $\operatorname{ReLU}$ eliminates residual carry leakage ($42.2\% \to 71.9\%$ on $40$-digit pure-$9$ chains).
-  \item \textbf{Sub-40s Certified $8\times\text{H100}$ LLM Training (\S\ref{sec:llm}):} Fusing Bias-Aware SSMax ($+42$ scalars) into \texttt{modded-nanogpt}'s QK-RMSNorm+RoPE Triton kernel adds $+72\text{ ms}$ ($+0.17\%$) and $+0\text{ MiB}$ VRAM, cuts run-to-run loss std by $3.5\text{--}4.9\times$, and reduces $8\times\text{H100 SXM5}$ training time from $40.45\text{ s} \to \mathbf{39.98\text{ s}}$ ($-0.477\text{ s}$, $10/10$ runs below $3.2784$, $p=1.26\times 10^{-6}$).
+  \item \textbf{Sub-40s Certified $8\times\text{H100}$ LLM Training (\S\ref{sec:llm}):} Fusing Mask-Aware SSMax ($+42$ scalars) into the QK-RMSNorm+RoPE Triton kernel of \texttt{modded-nanogpt} adds $+72\text{ ms}$ ($+0.17\%$) and $+0\text{ MiB}$ VRAM, cuts run-to-run loss std by $3.5\text{--}4.9\times$, and reduces $8\times\text{H100 SXM5}$ training time from $40.45\text{ s} \to \mathbf{39.98\text{ s}}$ ($-0.477\text{ s}$, $10/10$ runs below $3.2784$, $p=1.26\times 10^{-6}$).
 \end{itemize}}
 
 % =============================================================================
 \section{How Both Mechanisms Work}
 \label{sec:method}
 
-\subsection{Bias-Aware Scalable Softmax (Bias-Aware SSMax)}
+\subsection{Mask-Aware Scalable Softmax (Mask-Aware SSMax)}
 \label{sec:bssmax}
 
-Suppose query $i$ in head $h$ receives causal additive attention bias $B_{i,j,h} \in \R \cup \{-\infty\}$ (where masked or future keys have $B_{i,j,h} = -\infty$). How many keys effectively survive $B$ before content dot products are even added? Look at the partition function of $B$ shifted by its maximum:
+Suppose query $i$ in head $h$ receives a causal attention mask or additive bias $B_{i,j,h} \in \R \cup \{-\infty\}$ (where hidden, future, or out-of-window keys have $B_{i,j,h} = -\infty$ and unmasked keys have $B_{i,j,h} = 0$, or a continuous decay value under soft masks such as Barrier-FoX). How many keys effectively survive $B$ before content dot products are even added? Look at the partition function of $B$ shifted by its maximum:
 \begin{equation}
   \log \neff(i, h) \;=\; \operatorname{logsumexp}_{j \le i}(B_{i,j,h}) - \max_{j \le i}(B_{i,j,h}) \;\in\; \big[0,\; \log(i+1)\big].
   \label{eq:neff}
@@ -204,7 +204,7 @@ Figure~\ref{fig:mech_carry}b shows what that barrier profile does to attention: 
   \centering
   \includegraphics[width=\textwidth]{fig3_addition_results.pdf}
   \caption{\textbf{Addition extrapolation, causal knockout, and dead-zone ReLU verification.}
-  \textbf{(a)}~Exact match from $10\text{d}$ ($2\times$) to $200\text{d}$ ($40\times$ training length, $n=3$): Bias-Aware SSMax + Barrier-FoX sustains extrapolation to $100\text{d--}200\text{d}$, whereas Vanilla SSMax over-sharpens barrier-truncated heads and crashes from $44.5\%$ ($50\text{d}$) to $6.8\%$ ($100\text{d}$).
+  \textbf{(a)}~Exact match from $10\text{d}$ ($2\times$) to $200\text{d}$ ($40\times$ training length, $n=3$): Mask-Aware SSMax + Barrier-FoX sustains extrapolation to $100\text{d--}200\text{d}$, whereas Vanilla SSMax over-sharpens barrier-truncated heads and crashes from $44.5\%$ ($50\text{d}$) to $6.8\%$ ($100\text{d}$).
   \textbf{(b)}~Zeroing \emph{only} Layer 3--4 barrier gates at inference destroys $25$-digit accuracy across every tested checkpoint (up to $97.7\% \to 0.0\%$).
   \textbf{(c)}~On adversarial contiguous pure-$9$ carry chains ($N=64$, $112\text{k}$), strictly positive $\operatorname{softplus}$ leaks $\sim 0.05$ logits per column and caps at $42.2\%$ on $40$-digit chains; dead-zone $\operatorname{ReLU}$ drives Propagate columns to literal $0.000$ and jumps to $71.9\%$.}
   \label{fig:add_results}
@@ -212,7 +212,7 @@ Figure~\ref{fig:mech_carry}b shows what that barrier profile does to attention: 
 
 \begin{table}[t]
   \centering
-  \caption{Skip-4 addition exact match (\%, mean$\pm$std, $n=3$ seeds) trained only on $1,2,3,5$-digit operands. Bias-Aware SSMax and Barrier-FoX stack synergistically at both $112\text{k}$ and $1.27\text{M}$ scale; Vanilla SSMax crashes past $50\text{d}$.}
+  \caption{Skip-4 addition exact match (\%, mean$\pm$std, $n=3$ seeds) trained only on $1,2,3,5$-digit operands. Mask-Aware SSMax and Barrier-FoX stack synergistically at both $112\text{k}$ and $1.27\text{M}$ scale; Vanilla SSMax crashes past $50\text{d}$.}
   \label{tab:add}
   \footnotesize
   \renewcommand{\arraystretch}{1.14}
@@ -224,14 +224,14 @@ Figure~\ref{fig:mech_carry}b shows what that barrier profile does to attention: 
     $112\text{k}$ \texttt{v1.1} (Place-RoPE) & 112k & 97.6$\pm$2.2 & 20.8$\pm$12.1 & 0.0 & 0.0 & 0.0 & 0.0 & 0.0 \\
     \midrule
     $112\text{k}$ \texttt{v2} base (NoPE+log) & 112k & 99.5$\pm$0.6 & 78.2$\pm$10.1 & 32.8$\pm$16.6 & 15.3$\pm$14.4 & 0.0$\pm$0.0 & 0.0$\pm$0.0 & 0.0$\pm$0.0 \\
-    \quad $+$ Bias-SSMax & 112k & 99.8$\pm$0.2 & 85.1$\pm$14.2 & 44.0$\pm$35.7 & 28.4$\pm$35.8 & 3.4$\pm$5.9 & 0.0$\pm$0.0 & 0.0$\pm$0.0 \\
+    \quad $+$ Mask-SSMax & 112k & 99.8$\pm$0.2 & 85.1$\pm$14.2 & 44.0$\pm$35.7 & 28.4$\pm$35.8 & 3.4$\pm$5.9 & 0.0$\pm$0.0 & 0.0$\pm$0.0 \\
     \quad $+$ Barrier-FoX & 113k & 97.6$\pm$4.1 & 91.3$\pm$9.5 & 66.4$\pm$32.8 & 61.2$\pm$39.1 & 31.5$\pm$26.7 & 13.0$\pm$18.7 & 5.2$\pm$9.0 \\
     \quad $+$ Vanilla SSMax + B-FoX & 113k & 100.0$\pm$0.0 & \textbf{99.5$\pm$0.9} & \textbf{92.2$\pm$12.2} & \textbf{82.3$\pm$28.0} & \textbf{44.5$\pm$39.4} & 6.8$\pm$9.2 & 1.0$\pm$1.8 \\
-    \quad $+$ Bias-SSMax + B-FoX (ReLU) & 113k & 99.9$\pm$0.2 & 88.5$\pm$17.3 & 70.8$\pm$24.2 & 56.8$\pm$18.6 & 28.1$\pm$15.8 & 5.7$\pm$5.0 & 1.0$\pm$1.8 \\
-    \quad \textbf{$+$ Bias-SSMax $+$ B-FoX} & \textbf{113k} & \textbf{100.0$\pm$0.0} & 97.5$\pm$3.8 & 83.9$\pm$16.6 & 74.0$\pm$19.2 & 37.0$\pm$33.6 & \textbf{26.0$\pm$23.4} & \textbf{5.2$\pm$9.0} \\
+    \quad $+$ Mask-SSMax + B-FoX (ReLU) & 113k & 99.9$\pm$0.2 & 88.5$\pm$17.3 & 70.8$\pm$24.2 & 56.8$\pm$18.6 & 28.1$\pm$15.8 & 5.7$\pm$5.0 & 1.0$\pm$1.8 \\
+    \quad \textbf{$+$ Mask-SSMax $+$ B-FoX} & \textbf{113k} & \textbf{100.0$\pm$0.0} & 97.5$\pm$3.8 & 83.9$\pm$16.6 & 74.0$\pm$19.2 & 37.0$\pm$33.6 & \textbf{26.0$\pm$23.4} & \textbf{5.2$\pm$9.0} \\
     \midrule
     $1.27\text{M}$ \texttt{v2} base (NoPE+log) & 1.27M & 99.2$\pm$0.6 & 73.1$\pm$13.5 & 35.4$\pm$21.1 & 23.4$\pm$18.9 & 2.3$\pm$4.0 & 0.0$\pm$0.0 & 0.0$\pm$0.0 \\
-    \quad \textbf{$+$ Bias-SSMax $+$ B-FoX} & \textbf{1.28M} & \textbf{100.0$\pm$0.0} & \textbf{99.4$\pm$0.9} & \textbf{93.2$\pm$4.7} & \textbf{83.1$\pm$15.3} & \textbf{40.6$\pm$21.5} & \textbf{29.7$\pm$28.7} & \textbf{27.1$\pm$46.9}$^\dagger$ \\
+    \quad \textbf{$+$ Mask-SSMax $+$ B-FoX} & \textbf{1.28M} & \textbf{100.0$\pm$0.0} & \textbf{99.4$\pm$0.9} & \textbf{93.2$\pm$4.7} & \textbf{83.1$\pm$15.3} & \textbf{40.6$\pm$21.5} & \textbf{29.7$\pm$28.7} & \textbf{27.1$\pm$46.9}$^\dagger$ \\
     \bottomrule
   \end{tabular}
   \vspace{2pt}
@@ -242,8 +242,8 @@ Figure~\ref{fig:mech_carry}b shows what that barrier profile does to attention: 
 
 Table~\ref{tab:add} and Figure~\ref{fig:add_results}a summarize the full factorial sweep:
 \begin{itemize}
-  \item \textbf{Synergistic extrapolation:} Combining Bias-Aware SSMax ($+16$ scalars) and Barrier-FoX ($+784$ params at $112\text{k}$) lifts $25$-digit ($5\times$) exact match from $15.3\% \to \mathbf{74.0\%}$ at $112\text{k}$ ($+58.6\text{pp}$, two-sided Welch $p=0.0157$) and from $23.4\% \to \mathbf{83.1\%}$ at $1.27\text{M}$ ($+59.7\text{pp}$, $p=0.0145$). On $1.27\text{M}$ seed 0---which pushed its Layer 4 Head 3 Propagate barrier all the way down to $0.00$---accuracy reaches $\mathbf{81.2\%}$ at $200$ digits ($40\times$ training length).
-  \item \textbf{Why Bias-Aware beats Vanilla SSMax:} On \texttt{v2+B-FoX}, Vanilla SSMax scales by raw $\log(i+1)$ even after barriers have trimmed each head to a handful of unblocked keys. That extra sharpening helps at $10\text{d--}50\text{d}$ but over-sharpens and collapses past $50\text{d}$, dropping to $6.8\%$ at $100\text{d}$ ($3.8\times$ worse than Bias-Aware's $26.0\%$). On Place-RoPE \texttt{v1.1}, Bias-Aware beats Vanilla at every OOD length ($8\text{d}$ EMA $68.6\%$ vs.\ $60.3\%$) while cutting seed std in half ($\pm 14.5$ vs.\ $\pm 32.3$). Two negative controls that \emph{soften} attention on \texttt{v1.1} (Partition-Function Stretch and Attention Score Decay $10^{-4}$) drop $10\text{d}$ EMA from $23.0\% \to 8.5\%$ and $7.0\%$, matching $10\text{d}$ attention sharpness with exact rank correlation ($\rho = 1.00$).
+  \item \textbf{Synergistic extrapolation:} Combining Mask-Aware SSMax ($+16$ scalars) and Barrier-FoX ($+784$ params at $112\text{k}$) lifts $25$-digit ($5\times$) exact match from $15.3\% \to \mathbf{74.0\%}$ at $112\text{k}$ ($+58.6\text{pp}$, two-sided Welch $p=0.0157$) and from $23.4\% \to \mathbf{83.1\%}$ at $1.27\text{M}$ ($+59.7\text{pp}$, $p=0.0145$). On $1.27\text{M}$ seed 0---which pushed its Layer 4 Head 3 Propagate barrier all the way down to $0.00$---accuracy reaches $\mathbf{81.2\%}$ at $200$ digits ($40\times$ training length).
+  \item \textbf{Why Mask-Aware beats Vanilla SSMax:} On \texttt{v2+B-FoX}, Vanilla SSMax scales by raw $\log(i+1)$ even after barriers have trimmed each head to a handful of unblocked keys. That extra sharpening helps at $10\text{d--}50\text{d}$ but over-sharpens and collapses past $50\text{d}$, dropping to $6.8\%$ at $100\text{d}$ ($3.8\times$ worse than Mask-Aware's $26.0\%$). On Place-RoPE \texttt{v1.1}, Mask-Aware beats Vanilla at every OOD length ($8\text{d}$ EMA $68.6\%$ vs.\ $60.3\%$) while cutting seed std in half ($\pm 14.5$ vs.\ $\pm 32.3$). Two negative controls that \emph{soften} attention on \texttt{v1.1} (Partition-Function Stretch and Attention Score Decay $10^{-4}$) drop $10\text{d}$ EMA from $23.0\% \to 8.5\%$ and $7.0\%$, matching $10\text{d}$ attention sharpness with exact rank correlation ($\rho = 1.00$).
   \item \textbf{Testing the softplus-leakage prediction:} On synthetic sums containing $40$ consecutive $9$-columns (Figure~\ref{fig:add_results}c), strictly positive $\operatorname{softplus}$ leaks $40 \times 0.05 \approx 2.0$ logits and plateaus at $42.2\%$. Swapping in dead-zone $\operatorname{ReLU}$ drives four carry heads in seed 0 to \textbf{literal $0.000$ on $100\%$ of Propagate columns} and jumps $40$-digit chain accuracy to $\mathbf{71.9\%}$---confirming the diagnosis, while honestly revealing a dead-ReLU seed-variance trade-off on random sums ($56.8\%$ vs.\ $74.0\%$ at $25\text{d}$).
 \end{itemize}
 
@@ -251,7 +251,7 @@ Table~\ref{tab:add} and Figure~\ref{fig:add_results}a summarize the full factori
 \section{Generalization Without Digit Formulas: Multi-Step Symbolic Algebra}
 \label{sec:expr}
 
-Place-Ordered Barrier-FoX uses digit place coordinates specific to arithmetic. Does our approach still win when there are \textbf{zero digit coordinates and zero task-specific length formulas}? We test canonical step-by-step rewriting of nested exact-rational expressions with $+, -, \times, \div$, and parentheses (evaluated with Python \texttt{Fraction}, e.g., \texttt{(17*22)/(18+321+4122451)-123+34/12} reduced over $15$ exact lines). We compare two matched $4\text{L}\,4\text{H}\,d=96$ models ($n=3$ seeds, exact KV-cached greedy rollout): \textbf{\texttt{NeoExprGPT}} ($447\text{k}$: NoPE + clipped local + ALiBi-log + strictly causal parenthesis-depth relative bias + general token-order \textbf{Token-FoX} + \textbf{Bias-Aware SSMax}) against a standard \textbf{\texttt{RoPE GPT}} baseline ($445\text{k}$).
+Place-Ordered Barrier-FoX uses digit place coordinates specific to arithmetic. Does our approach still win when there are \textbf{zero digit coordinates and zero task-specific length formulas}? We test canonical step-by-step rewriting of nested exact-rational expressions with $+, -, \times, \div$, and parentheses (evaluated with Python \texttt{Fraction}, e.g., \texttt{(17*22)/(18+321+4122451)-123+34/12} reduced over $15$ exact lines). We compare two matched $4\text{L}\,4\text{H}\,d=96$ models ($n=3$ seeds, exact KV-cached greedy rollout): \textbf{\texttt{NeoExprGPT}} ($447\text{k}$: NoPE + clipped local + ALiBi-log + strictly causal parenthesis-depth relative bias + general token-order \textbf{Token-FoX} + \textbf{Mask-Aware SSMax}) against a standard \textbf{\texttt{RoPE GPT}} baseline ($445\text{k}$).
 
 \begin{table}[ht]
   \centering
@@ -273,7 +273,7 @@ Place-Ordered Barrier-FoX uses digit place coordinates specific to arithmetic. D
     \textbf{\texttt{NeoExprGPT} Full} ($447\text{k}$) & \textbf{57.6$\pm$9.8} / \textbf{97.6} & \textbf{2.1$\pm$2.1} / \textbf{94.6} & \textbf{15.3$\pm$7.3} / \textbf{96.8} & \textbf{7.6$\pm$2.4} / \textbf{85.6} \\
     $-$ Causal Depth ($-96$) & 56.2$\pm$0.0 / 97.6 & 1.4$\pm$1.2 / 93.3$^\ast$ & 6.9$\pm$3.2 / 96.0$^\ast$ & 4.2$\pm$0.0 / 85.3 \\
     $-$ Token-FoX ($-1.6\text{k}$) & 47.2$\pm$3.2 / 96.8 & 0.7$\pm$1.2 / 93.5 & 6.9$\pm$3.2 / 95.9 & 2.8$\pm$1.2$^\ast$ / 83.9 \\
-    $-$ Bias-SSMax ($-16$) & 56.2$\pm$7.2 / 97.5 & 2.1$\pm$2.1 / 93.0$^\ast$ & 9.0$\pm$5.2$^\ast$ / 96.4 & 3.5$\pm$2.4 / 84.3 \\
+    $-$ Mask-SSMax ($-16$) & 56.2$\pm$7.2 / 97.5 & 2.1$\pm$2.1 / 93.0$^\ast$ & 9.0$\pm$5.2$^\ast$ / 96.4 & 3.5$\pm$2.4 / 84.3 \\
     \texttt{RoPE GPT} base ($445\text{k}$) & 48.6$\pm$9.8 / 97.0 & 0.7$\pm$1.2 / 76.6$^\dagger$ & 6.9$\pm$1.2 / 88.2$^\dagger$ & 3.5$\pm$1.2 / 83.2 \\
     \bottomrule
   \end{tabular}
@@ -281,7 +281,7 @@ Place-Ordered Barrier-FoX uses digit place coordinates specific to arithmetic. D
   \parbox{\textwidth}{\footnotesize\color{muted} $^\ast p<0.05$, $^\dagger p<0.001$ vs.\ Full \texttt{NeoExprGPT}. At $18\text{k}$, $100\%$ of \texttt{NeoExprGPT}'s \texttt{ood\_depth} final answers are verified step-by-step ($43.1\% = 43.1\%$).}
 \end{table}
 
-Table~\ref{tab:expr} shows that even when trained to $\sim 90\%$ in-distribution mastery ($18\text{k}$ steps), \texttt{RoPE GPT} drops to $79.2\%$ token accuracy ($4.2\%$ exact) on $2\times$ longer rewriting chains (\texttt{ood\_steps}). \texttt{NeoExprGPT} keeps $96.4\%$ token accuracy ($p=0.0033$) and $15.3\%$ exact match ($3.7\times$), while adding $+14.6\text{pp}$ exact match on unseen nesting depths ($p=0.0038$ tok, $100\%$ trace-verified). Ablating each piece at $6\text{k}$ confirms clean division of labor: NoPE+ALiBi-log prevents RoPE's length collapse, \textbf{Token-FoX} delivers the biggest convergence boost ($-10.4\text{pp}$ \texttt{in\_dist}, $-4.9\text{pp}$ \texttt{ood\_scale}, $p=0.020$) by walling off finished CoT lines, causal depth bias doubles \texttt{ood\_depth} ($15.3\% \to 6.9\%$), and \textbf{Bias-Aware SSMax} ($+16$ scalars) significantly improves both \texttt{ood\_depth} ($p=0.035$) and \texttt{ood\_steps} token accuracy ($p=0.029$).
+Table~\ref{tab:expr} shows that even when trained to $\sim 90\%$ in-distribution mastery ($18\text{k}$ steps), \texttt{RoPE GPT} drops to $79.2\%$ token accuracy ($4.2\%$ exact) on $2\times$ longer rewriting chains (\texttt{ood\_steps}). \texttt{NeoExprGPT} keeps $96.4\%$ token accuracy ($p=0.0033$) and $15.3\%$ exact match ($3.7\times$), while adding $+14.6\text{pp}$ exact match on unseen nesting depths ($p=0.0038$ tok, $100\%$ trace-verified). Ablating each piece at $6\text{k}$ confirms clean division of labor: NoPE+ALiBi-log prevents RoPE's length collapse, \textbf{Token-FoX} delivers the biggest convergence boost ($-10.4\text{pp}$ \texttt{in\_dist}, $-4.9\text{pp}$ \texttt{ood\_scale}, $p=0.020$) by walling off finished CoT lines, causal depth bias doubles \texttt{ood\_depth} ($15.3\% \to 6.9\%$), and \textbf{Mask-Aware SSMax} ($+16$ scalars) significantly improves both \texttt{ood\_depth} ($p=0.035$) and \texttt{ood\_steps} token accuracy ($p=0.029$).
 
 % =============================================================================
 \section{Scaling to Real Language Models \& Sub-40s \texorpdfstring{8$\times$H100}{8xH100} Training}
@@ -289,14 +289,14 @@ Table~\ref{tab:expr} shows that even when trained to $\sim 90\%$ in-distribution
 
 We now test whether these mechanisms transfer to real English pretraining on \texttt{FineWeb-10B}~\cite{penedo2024} inside the heavily optimized \texttt{modded-nanogpt} speedrun~\cite{jordan2024}---first on a $33.5\text{M}$ $5$-arm probe, then on the full $124\text{M}$ Track 1 record candidate ($61$ total runs across Modal and bare-metal Nebius $8\times\text{H100 SXM5}$).
 
-\subsection{33.5M FineWeb-10B Probe: Bias-Aware SSMax vs.\ Dead-Zone ReLU-FoX}
+\subsection{33.5M FineWeb-10B Probe: Mask-Aware SSMax vs.\ Dead-Zone ReLU-FoX}
 \label{sec:fineweb}
 
-On a faithful $33.5\text{M}$ \texttt{modded-nanogpt} stack ($8\text{L}\,6\text{H}\,d=384$, QK-RMSNorm, RoPE, $\operatorname{ReLU}^2$, Muon + AdamW, FlexAttention with \texttt{<|endoftext|>} doc masking and alternating short/long sliding windows warming up $128\to 512$ / $256\to 2048$, $49.15\text{M}$ tokens, $n=3$ seeds on Modal A10G), we compare baseline, Vanilla SSMax, Window/Doc-Aware Bias-Aware SSMax (Eq.~\ref{eq:nvis}, $+48$ scalars), Dead-Zone $\operatorname{ReLU}$ Token-FoX, and both together (Table~\ref{tab:fineweb} and Figure~\ref{fig:llm_mech}b).
+On a faithful $33.5\text{M}$ \texttt{modded-nanogpt} stack ($8\text{L}\,6\text{H}\,d=384$, QK-RMSNorm, RoPE, $\operatorname{ReLU}^2$, Muon + AdamW, FlexAttention with \texttt{<|endoftext|>} doc masking and alternating short/long sliding windows warming up $128\to 512$ / $256\to 2048$, $49.15\text{M}$ tokens, $n=3$ seeds on Modal A10G), we compare baseline, Vanilla SSMax, Window/Doc Mask-Aware SSMax (Eq.~\ref{eq:nvis}, $+48$ scalars), Dead-Zone $\operatorname{ReLU}$ Token-FoX, and both together (Table~\ref{tab:fineweb} and Figure~\ref{fig:llm_mech}b).
 
 \begin{table}[ht]
   \centering
-  \caption{$33.5\text{M}$ \texttt{modded-nanogpt} FineWeb-10B probe ($n=3$ seeds, Modal A10G, $49.15\text{M}$ tokens). Window/Doc-Aware \texttt{bssmax} ($+48$ scalars) beats both \texttt{base} ($p=0.011$) and \texttt{vssmax} ($p=0.003$) on $3/3$ seeds and already saves net wall-clock time.}
+  \caption{$33.5\text{M}$ \texttt{modded-nanogpt} FineWeb-10B probe ($n=3$ seeds, Modal A10G, $49.15\text{M}$ tokens). Mask-Aware SSMax (\texttt{bssmax}) ($+48$ scalars) beats both \texttt{base} ($p=0.011$) and \texttt{vssmax} ($p=0.003$) on $3/3$ seeds and already saves net wall-clock time.}
   \label{tab:fineweb}
   \footnotesize
   \renewcommand{\arraystretch}{1.14}
@@ -307,7 +307,7 @@ On a faithful $33.5\text{M}$ \texttt{modded-nanogpt} stack ($8\text{L}\,6\text{H
     \midrule
     \texttt{base} (\texttt{modded-nanogpt}) & $0$ & $4.3215 \pm .0047$ & --- & $4.2910 \pm .0075$ & --- & 1500 st (1039s) \\
     \texttt{vssmax} (Vanilla SSMax) & $+48$ & $4.3073 \pm .0022$ & $-.0142$ (.013) & $4.2685 \pm .0034$ & $-.0225$ (.012) & 1472 st (1060s) \\
-    \textbf{\texttt{bssmax} (Bias-Aware)} & \textbf{$+48$} & \textbf{4.3046 $\pm$ .0020} & \textbf{$-.0168$ (.011)} & \textbf{4.2636 $\pm$ .0033} & \textbf{$-.0274$ (.009)} & \textbf{1467 st (1030s, $-0.8\%$)} \\
+    \textbf{\texttt{bssmax} (Mask-Aware)} & \textbf{$+48$} & \textbf{4.3046 $\pm$ .0020} & \textbf{$-.0168$ (.011)} & \textbf{4.2636 $\pm$ .0033} & \textbf{$-.0274$ (.009)} & \textbf{1467 st (1030s, $-0.8\%$)} \\
     \texttt{relu\_fox} (ReLU-FoX) & $+18.5\text{k}$ & $4.3111 \pm .0056$ & $-.0103$ (.129) & $4.2777 \pm .0054$ & $-.0132$ (.114) & 1480 st (1055s) \\
     \texttt{bssmax} $+$ \texttt{relu\_fox} & $+18.5\text{k}$ & \textbf{4.3043 $\pm$ .0029} & \textbf{$-.0172$ (.025)} & $4.2637 \pm .0030$ & $-.0273$ (.023) & 1466 st (1055s) \\
     \bottomrule
@@ -322,7 +322,7 @@ Second, \textbf{Dead-Zone \texttt{relu\_fox}} teaches an equally clean lesson: w
 
 \subsection{Zero-HBM-Traffic Triton Fusion for 124M \texttt{modded-nanogpt}}
 
-To compete on the official $124\text{M}$ \texttt{modded-nanogpt} Track 1 speedrun (Record \#92 / ANVIL2, \texttt{HEAD 4ea6b93}: $11$ layers with $7$ attention layers $\texttt{L0,1,2,3,5,8,10} \times 6\text{ heads} = 42$ heads, FlashAttention-3 varlen, FP8 projections, CUDA graphs), an architectural win only pays off if its runtime overhead is practically zero. We implement centered Bias-Aware SSMax ($\tau_{\ell,h}(t) = \max(0.25,\, 1 + s_{\ell,h}(\log \nvis(t,\ell) - 5.5))$, $+42$ fp32 scalars) in $+138/-26$ lines across $5$ files ($0$ edits to \texttt{train\_gpt.py}) with \textbf{zero extra HBM reads or writes on $Q, K, V$}:
+To compete on the official $124\text{M}$ \texttt{modded-nanogpt} Track 1 speedrun (Record \#92 / ANVIL2, \texttt{HEAD 4ea6b93}: $11$ layers with $7$ attention layers $\texttt{L0,1,2,3,5,8,10} \times 6\text{ heads} = 42$ heads, FlashAttention-3 varlen, FP8 projections, CUDA graphs), an architectural win only pays off if its runtime overhead is practically zero. We implement centered Mask-Aware SSMax ($\tau_{\ell,h}(t) = \max(0.25,\, 1 + s_{\ell,h}(\log \nvis(t,\ell) - 5.5))$, $+42$ fp32 scalars) in $+138/-26$ lines across $5$ files ($0$ edits to \texttt{train\_gpt.py}) with \textbf{zero extra HBM reads or writes on $Q, K, V$}:
 \begin{enumerate}[leftmargin=1.5em,itemsep=2pt,topsep=2pt]
   \item \textbf{One tiny binary-search launch (\texttt{compute\_ssmax\_log\_n}):} Once per step, a single Triton kernel binary-searches the stock loader's \texttt{cu\_seqlens} array to compute $\log\nvis - 5.5$ for short, paired-short ($2\times$ interleaved), and long windows, reading an address-stable $3$-element window buffer updated in place across stages so CUDA graphs stay sealed.
   \item \textbf{Fused forward multiply:} Inside the existing QK-RMSNorm + RoPE kernel (\texttt{qkv\_rope.py}), normalized rotated queries $y$ are multiplied by $\tau$ in registers right before storing \texttt{out\_q}.
@@ -338,7 +338,7 @@ Measured on $8\times\text{H100 SXM5}$ at identical step count ($1{,}182$ steps),
   \centering
   \includegraphics[width=\textwidth]{fig4_llm_mech.pdf}
   \caption{\textbf{Opening the 124M LLM black box + 33.5M FineWeb curves.}
-  \textbf{(a)}~Real learned per-head slopes $s_{\ell,h}$ across all $7$ attention layers of $124\text{M}$ \texttt{modded-nanogpt} ($n=6$ centered low-LR runs = $252$ heads vs.\ $n=2$ Vanilla SSMax runs). Under Bias-Aware SSMax, $250/252$ heads ($99.2\%$) learn strictly positive slopes, and the two long-window layers (\texttt{L3}: $+0.102$, \texttt{L10}: $+0.090$, shaded) automatically learn $\sim 2.5\times$ steeper curves than short-window layers ($+0.035\text{--}0.072$). Under bias-blind Vanilla SSMax, \texttt{L10} collapses $10\times$ to $+0.009$.
+  \textbf{(a)}~Real learned per-head slopes $s_{\ell,h}$ across all $7$ attention layers of $124\text{M}$ \texttt{modded-nanogpt} ($n=6$ centered low-LR runs = $252$ heads vs.\ $n=2$ Vanilla SSMax runs). Under Mask-Aware SSMax, $250/252$ heads ($99.2\%$) learn strictly positive slopes, and the two long-window layers (\texttt{L3}: $+0.102$, \texttt{L10}: $+0.090$, shaded) automatically learn $\sim 2.5\times$ steeper curves than short-window layers ($+0.035\text{--}0.072$). Under mask-blind Vanilla SSMax, \texttt{L10} collapses $10\times$ to $+0.009$.
   \textbf{(b)}~$33.5\text{M}$ FineWeb-10B validation loss delta vs.\ baseline ($n=3$): \texttt{relu\_fox} drops early loss by $-0.218$ nats (with $68.5\%$ exact-zero tokens), while \texttt{bssmax} wins cleanly at convergence.}
   \label{fig:llm_mech}
 \end{figure}
@@ -348,7 +348,7 @@ Measured on $8\times\text{H100 SXM5}$ at identical step count ($1{,}182$ steps),
 What do those $42$ learned scalars actually do inside a $124\text{M}$ language model? Figure~\ref{fig:llm_mech}a plots every single learned head slope across all $7$ attention layers from our matched-step $G=52$ runs:
 \begin{itemize}
   \item \textbf{Universal sharpening with visible length:} Across $6$ independent low-LR runs ($252$ heads total), \textbf{$250/252$ ($99.2\%$) heads} spontaneously learn strictly positive slopes $s_{\ell,h} > 0$.
-  \item \textbf{Window-aware specialization:} In \texttt{modded-nanogpt}, layers \texttt{L0, L1, L2, L5, L8} use short sliding windows (reaching $640\text{--}768$ tokens), while \texttt{L3} and \texttt{L10} use long sliding windows (reaching $1{,}408\text{--}2{,}560$ tokens). Without being told which layers are long, Bias-Aware SSMax learns $\sim 2.5\times$ larger slopes on the two long-window layers (\texttt{L3}: $+0.102$, \texttt{L10}: $+0.090$) than on the short-window layers (\texttt{L2}: $+0.035$, \texttt{L5}: $+0.044$).
+  \item \textbf{Window-aware specialization:} In \texttt{modded-nanogpt}, layers \texttt{L0, L1, L2, L5, L8} use short sliding windows (reaching $640\text{--}768$ tokens), while \texttt{L3} and \texttt{L10} use long sliding windows (reaching $1{,}408\text{--}2{,}560$ tokens). Without being told which layers are long, Mask-Aware SSMax learns $\sim 2.5\times$ larger slopes on the two long-window layers (\texttt{L3}: $+0.102$, \texttt{L10}: $+0.090$) than on the short-window layers (\texttt{L2}: $+0.035$, \texttt{L5}: $+0.044$).
   \item \textbf{Why Vanilla SSMax breaks:} When given raw batch position instead of $\nvis$, the optimizer cannot trust the slope at document boundaries---so it crushes \texttt{L10}'s slope $10\times$ down to $+0.009$ and ends up \emph{worse} than unmodified \texttt{HEAD} ($3.2786$ vs.\ $3.2761$).
 \end{itemize}
 
@@ -358,12 +358,12 @@ What do those $42$ learned scalars actually do inside a $124\text{M}$ language m
   \centering
   \includegraphics[width=\textwidth]{fig5_speedrun_cert.pdf}
   \caption{\textbf{Flagship $124\text{M}$ \texttt{modded-nanogpt} certification ($8\times\text{H100 SXM5}$) and matched-step ablations.}
-  \textbf{(a)}~All $25$ official bare-metal Nebius runs plotted as wall-clock time vs.\ final validation loss against the $3.28$ gate (red dashed line). Cutting $12$ Stage-2 steps alone (\texttt{HEAD G=40}, red $\times$) fails the gate ($3.2800$, $2/5$ spikes, $p=0.496$). Adding centered Bias-Aware SSMax at the exact same $1{,}182$ steps (blue squares) hits \textbf{sub-40s ($39.977\text{ s}$, $-0.477\text{ s}$ vs.\ interleaved \texttt{HEAD})} with $10/10$ runs tightly clustered below $3.2784$ ($p=1.26\times 10^{-6}$, $3.5\times$ tighter $\sigma$).
-  \textbf{(b)}~Matched-step ($G=52$, $1{,}194$ st) Modal design ablations ($n=27$ runs): centered $1$-parameter Bias-Aware SSMax beats both \texttt{HEAD} ($-1.8\text{ mnat}$) and Vanilla SSMax ($-4.2\text{ mnat}$) while cutting variance $>2.5\times$.}
+  \textbf{(a)}~All $25$ official bare-metal Nebius runs plotted as wall-clock time vs.\ final validation loss against the $3.28$ gate (red dashed line). Cutting $12$ Stage-2 steps alone (\texttt{HEAD G=40}, red $\times$) fails the gate ($3.2800$, $2/5$ spikes, $p=0.496$). Adding centered Mask-Aware SSMax at the exact same $1{,}182$ steps (blue squares) hits \textbf{sub-40s ($39.977\text{ s}$, $-0.477\text{ s}$ vs.\ interleaved \texttt{HEAD})} with $10/10$ runs tightly clustered below $3.2784$ ($p=1.26\times 10^{-6}$, $3.5\times$ tighter $\sigma$).
+  \textbf{(b)}~Matched-step ($G=52$, $1{,}194$ st) Modal design ablations ($n=27$ runs): centered $1$-parameter Mask-Aware SSMax beats both \texttt{HEAD} ($-1.8\text{ mnat}$) and Vanilla SSMax ($-4.2\text{ mnat}$) while cutting variance $>2.5\times$.}
   \label{fig:cert}
 \end{figure}
 
-Before touching the step schedule, we ran $27$ matched-step ($G=52$, $1{,}194$ steps) ablations on Modal $8\times\text{H100/H200}$ (Figure~\ref{fig:cert}b). Centered $1$-parameter Bias-Aware SSMax at $\text{lr\_mul} = 0.5$ achieved $3.27430 \pm 0.00099$ ($n=4$; pooled low-LR $\text{lr\_mul}\in\{0.25,0.5\}$, $n=6$: $3.27437 \pm 0.00089$), beating interleaved \texttt{HEAD} ($3.27614 \pm 0.00222$, $n=7$) by $-1.77\text{ mnat}$ (one-sided Welch $p=0.044$, two-sided $p=0.088$, Mann--Whitney $U$ $p=0.031$) and beating Vanilla SSMax ($3.27855 \pm 0.00092$, $n=2$) by $-4.25\text{ mnat}$ (two-sided $p=0.027$). Adding a second per-head intercept parameter (\texttt{2-Param}, $+84$ scalars) gave the same mean ($3.2745$) with $2.7\times$ worse variance, confirming that the simpler $1$-parameter centered form is strictly better.
+Before touching the step schedule, we ran $27$ matched-step ($G=52$, $1{,}194$ steps) ablations on Modal $8\times\text{H100/H200}$ (Figure~\ref{fig:cert}b). Centered $1$-parameter Mask-Aware SSMax at $\text{lr\_mul} = 0.5$ achieved $3.27430 \pm 0.00099$ ($n=4$; pooled low-LR $\text{lr\_mul}\in\{0.25,0.5\}$, $n=6$: $3.27437 \pm 0.00089$), beating interleaved \texttt{HEAD} ($3.27614 \pm 0.00222$, $n=7$) by $-1.77\text{ mnat}$ (one-sided Welch $p=0.044$, two-sided $p=0.088$, Mann--Whitney $U$ $p=0.031$) and beating Vanilla SSMax ($3.27855 \pm 0.00092$, $n=2$) by $-4.25\text{ mnat}$ (two-sided $p=0.027$). Adding a second per-head intercept parameter (\texttt{2-Param}, $+84$ scalars) gave the same mean ($3.2745$) with $2.7\times$ worse variance, confirming that the simpler $1$-parameter centered form is strictly better.
 
 We then ran the full certification on a bare-metal Nebius \texttt{8x NVIDIA H100 80GB HBM3} (\texttt{NV18} NVSwitch, \texttt{torch 2.10.0+cu128}, zero extra compiler flags, unmodified \texttt{run.sh}). Converting the $-1.8\text{ mnat}$ ML headroom into speed by trimming $12$ Stage-2 batch-$24$ steps (\texttt{SCHEDULE\_GROWTH\_STEPS: 52 $\to$ 40}, preserving exact mod-$4$ n-gram and mod-$2$ Adam boundary parity) yields the certification results in Table~\ref{tab:cert} and Figure~\ref{fig:cert}a:
 
@@ -373,28 +373,28 @@ We then ran the full certification on a bare-metal Nebius \texttt{8x NVIDIA H100
   \label{tab:cert}
   \footnotesize
   \renewcommand{\arraystretch}{1.14}
-  \setlength{\tabcolsep}{3.6pt}
+  \setlength{\tabcolsep}{3.0pt}
   \begin{tabular}{@{}lrrcccrc@{}}
     \toprule
     Arm & $n$ & Steps & Wall Time & Final \texttt{val\_loss} & Range & $>3.28$ & $p(<3.28)$ \\
     \midrule
     \multicolumn{8}{@{}l}{\textit{\textbf{Bare-Metal Nebius $8\times\text{H100 SXM5}$ (Official Interleaved Certification + Matched-Step Control)}}} \\
     \texttt{HEAD} (\texttt{4ea6b93}, $G=52$) & 10 & 1194 & $40.454 \pm 0.024\text{ s}$ & $3.27610 \pm 0.00281$ & $3.2736\text{--}3.2832$ & $1/10$ & $8.78\times 10^{-4}$ \\
-    \textbf{Bias-Aware SSMax ($G=40$)} & \textbf{10} & \textbf{1182} & \textbf{39.977 $\pm$ 0.020 s} & \textbf{3.27738 $\pm$ 0.00079} & \textbf{3.2760--3.2784} & \textbf{0/10} & \textbf{1.26$\times$10$^{-6}$} \\
+    \textbf{Mask-Aware SSMax ($G=40$)} & \textbf{10} & \textbf{1182} & \textbf{39.977 $\pm$ 0.020 s} & \textbf{3.27738 $\pm$ 0.00079} & \textbf{3.2760--3.2784} & \textbf{0/10} & \textbf{1.26$\times$10$^{-6}$} \\
     \texttt{HEAD @ G=40} (step-cut only) & 5 & 1182 & $39.905 \pm 0.011\text{ s}$ & $3.27998 \pm 0.00389$ & $3.2768\text{--}3.2865$ & $2/5$ & $0.496$ (\textbf{FAIL}) \\
     \midrule
     \multicolumn{8}{@{}l}{\textit{\textbf{Modal $8\times\text{H100/H200}$ (Matched-Step $G=52$ Design Ablations)}}} \\
     \texttt{HEAD} (base controls) & 7 & 1194 & --- & $3.27614 \pm 0.00222$ & $3.2744\text{--}3.2810$ & $1/7$ & --- \\
     Vanilla SSMax (\texttt{vssmax}) & 2 & 1194 & --- & $3.27855 \pm 0.00092$ & $3.2779\text{--}3.2792$ & $0/2$ & --- \\
-    \textbf{Centered Bias-SSMax ($\text{lr}\le 0.5$)} & \textbf{6} & \textbf{1194} & --- & \textbf{3.27437 $\pm$ 0.00089} & \textbf{3.2734--3.2753} & \textbf{0/6} & --- \\
+    \textbf{Centered Mask-SSMax ($\text{lr}\le 0.5$)} & \textbf{6} & \textbf{1194} & --- & \textbf{3.27437 $\pm$ 0.00089} & \textbf{3.2734--3.2753} & \textbf{0/6} & --- \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \begin{itemize}
-  \item \textbf{Sub-40s speedrun win:} Across $10$ adjacent interleaved pairs, Bias-Aware SSMax runs in $\mathbf{39.977 \pm 0.020\text{ s}}$ vs.\ \texttt{HEAD}'s $40.454 \pm 0.024\text{ s}$---\textbf{$-0.477 \pm 0.034\text{ s}$ ($-1.18\%$)}, two-sided paired $p = 7.62\times 10^{-12}$---while clearing the $3.28$ gate at $3.27738 \pm 0.00079$ ($t = -10.43$, one-sided $p = 1.26\times 10^{-6}$).
-  \item \textbf{Not just a step cut:} Cutting the exact same $12$ steps from \texttt{HEAD} without SSMax (\texttt{HEAD @ G=40}, $n=5$) degrades loss to $3.27998 \pm 0.00389$ ($2/5$ runs above $3.28$: $3.2805, 3.2865$, $p=0.496$---fails the gate!). At identical step count, Bias-Aware SSMax is \textbf{$-2.60\text{ mnat}$ better} with \textbf{$4.9\times$ tighter variance} for only $+72\text{ ms}$ kernel cost (an estimated $\sim 354\text{ ms}$ net matched-loss speedup, and an implied $373\text{ ms/mnat}$ slope vs.\ ANVIL2's $164\text{ ms/mnat}$ step-cut slope).
-  \item \textbf{Why run-to-run variance collapses across both clouds:} Across all $22$ unmodified \texttt{HEAD} runs on Modal and Nebius combined, \texttt{HEAD} spiked above $3.28$ four times ($3.2810, 3.2832, 3.2805, 3.2865$). Across all $16$ centered low-LR Bias-Aware SSMax runs on both clouds, \textbf{zero runs exceeded $3.2784$} ($3.5\text{--}4.9\times$ tighter std). Packed batches randomly mix short and long documents; fixed temperature leaves long-window queries under-sharpened and fresh document starts over-sharpened. Adapting $\tau$ to each token's exact visible context stabilizes attention entropy across random batches and random seeds.
+  \item \textbf{Sub-40s speedrun win:} Across $10$ adjacent interleaved pairs, Mask-Aware SSMax runs in $\mathbf{39.977 \pm 0.020\text{ s}}$ vs.\ \texttt{HEAD}'s $40.454 \pm 0.024\text{ s}$---\textbf{$-0.477 \pm 0.034\text{ s}$ ($-1.18\%$)}, two-sided paired $p = 7.62\times 10^{-12}$---while clearing the $3.28$ gate at $3.27738 \pm 0.00079$ ($t = -10.43$, one-sided $p = 1.26\times 10^{-6}$).
+  \item \textbf{Not just a step cut:} Cutting the exact same $12$ steps from \texttt{HEAD} without SSMax (\texttt{HEAD @ G=40}, $n=5$) degrades loss to $3.27998 \pm 0.00389$ ($2/5$ runs above $3.28$: $3.2805, 3.2865$, $p=0.496$---fails the gate!). At identical step count, Mask-Aware SSMax is \textbf{$-2.60\text{ mnat}$ better} with \textbf{$4.9\times$ tighter variance} for only $+72\text{ ms}$ kernel cost (an estimated $\sim 354\text{ ms}$ net matched-loss speedup, and an implied $373\text{ ms/mnat}$ slope vs.\ ANVIL2's $164\text{ ms/mnat}$ step-cut slope).
+  \item \textbf{Why run-to-run variance collapses across both clouds:} Across all $22$ unmodified \texttt{HEAD} runs on Modal and Nebius combined, \texttt{HEAD} spiked above $3.28$ four times ($3.2810, 3.2832, 3.2805, 3.2865$). Across all $16$ centered low-LR Mask-Aware SSMax runs on both clouds, \textbf{zero runs exceeded $3.2784$} ($3.5\text{--}4.9\times$ tighter std). Packed batches randomly mix short and long documents; fixed temperature leaves long-window queries under-sharpened and fresh document starts over-sharpened. Adapting $\tau$ to each token's exact visible context stabilizes attention entropy across random batches and random seeds.
 \end{itemize}
 
 % =============================================================================
@@ -404,14 +404,14 @@ We then ran the full certification on a bare-metal Nebius \texttt{8x NVIDIA H100
 Taken together, our experiments across four benchmarks ($112\text{k}$ to $124\text{M}$ parameters) reveal a clean practical rule of thumb:
 
 \begin{itemize}
-  \item \textbf{Use Bias-Aware SSMax everywhere.} In its closed-form window/document version (Eq.~\ref{eq:nvis}), it costs $+1$ scalar per head, $+0\text{ MiB}$ VRAM, and $+0.17\%$ runtime when fused into QK-RMSNorm+RoPE, yet improves accuracy, length extrapolation, and run-to-run stability across arithmetic, symbolic algebra, $33.5\text{M}$ FineWeb, and the $124\text{M}$ $8\times\text{H100}$ speedrun---beating bias-blind Vanilla SSMax on every single task.
-  \item \textbf{Add Barrier-FoX / Dead-Zone $\operatorname{ReLU}$-FoX when exact long-range state resets cannot be approximated by a fixed window.} On carry chains ($+59\text{pp}$ at $5\times$, $71.9\%$ on $40$-digit pure-$9$ chains) and multi-step symbolic rewriting ($+10.4\text{pp}$ convergence), learned walls are transformative. On short-window prose pretraining where hard sliding windows and \texttt{<|endoftext|>} masks already perform most resets, \texttt{relu\_fox} dramatically speeds up early training ($-0.218$ nats at step $250$) while self-discovering $68.5\%$ exact-zero tokens, but converges to parity with Bias-Aware SSMax alone.
+  \item \textbf{Use Mask-Aware SSMax everywhere.} In its closed-form window/document version (Eq.~\ref{eq:nvis}), it costs $+1$ scalar per head, $+0\text{ MiB}$ VRAM, and $+0.17\%$ runtime when fused into QK-RMSNorm+RoPE, yet improves accuracy, length extrapolation, and run-to-run stability across arithmetic, symbolic algebra, $33.5\text{M}$ FineWeb, and the $124\text{M}$ $8\times\text{H100}$ speedrun---beating mask-blind Vanilla SSMax on every single task.
+  \item \textbf{Add Barrier-FoX / Dead-Zone $\operatorname{ReLU}$-FoX when exact long-range state resets cannot be approximated by a fixed window.} On carry chains ($+59\text{pp}$ at $5\times$, $71.9\%$ on $40$-digit pure-$9$ chains) and multi-step symbolic rewriting ($+10.4\text{pp}$ convergence), learned walls are transformative. On short-window prose pretraining where hard sliding windows and \texttt{<|endoftext|>} masks already perform most resets, \texttt{relu\_fox} dramatically speeds up early training ($-0.218$ nats at step $250$) while self-discovering $68.5\%$ exact-zero tokens, but converges to parity with Mask-Aware SSMax alone.
 \end{itemize}
 
 \textbf{Limitations.}
 (1)~Hard $\operatorname{ReLU}$ barrier gates eliminate carry leakage completely on pure-$9$ chains ($71.9\%$) at the cost of higher dead-gate variance across random seeds on general sums; smoother dead-zone schedules (e.g., annealing from $\operatorname{softplus}$ to $\operatorname{ReLU}$) remain open.
-(2)~Place-Ordered Barrier-FoX uses digit place IDs specific to positional notation, whereas Token-FoX and Bias-Aware SSMax are completely domain-agnostic.
-(3)~We tested Bias-Aware SSMax up to $124\text{M}$ parameters / $3\text{k}$ context and \texttt{relu\_fox} under short sliding windows; validating both on full-context ($8\text{k--}32\text{k}$) billion-parameter models without short windows is a natural next step.
+(2)~Place-Ordered Barrier-FoX uses digit place IDs specific to positional notation, whereas Token-FoX and Mask-Aware SSMax are completely domain-agnostic.
+(3)~We tested Mask-Aware SSMax up to $124\text{M}$ parameters / $3\text{k}$ context and \texttt{relu\_fox} under short sliding windows; validating both on full-context ($8\text{k--}32\text{k}$) billion-parameter models without short windows is a natural next step.
 
 \vspace{6pt}
 \begingroup
